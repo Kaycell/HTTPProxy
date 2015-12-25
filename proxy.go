@@ -6,10 +6,14 @@ import (
 	"net/http"
 	"net/http/httputil"
 	"net/url"
+	"regexp"
+	"time"
 )
 
 type proxy struct {
-	requestLogger *log.Logger
+	requestLogger  *log.Logger
+	routeWhiteList []*regexp.Regexp
+	routeBlackList []*regexp.Regexp
 }
 
 func newProxy(requestHandle io.Writer) *proxy {
@@ -18,18 +22,20 @@ func newProxy(requestHandle io.Writer) *proxy {
 }
 
 func (p *proxy) run(port string) {
-	http.HandleFunc("/", func(w http.ResponseWriter, req *http.Request) {
-		host := req.Host
+	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		host := r.Host
 		if host == "" {
-			w.WriteHeader(502)
+			w.WriteHeader(http.StatusBadGateway)
 			return
 		}
-		p.requestLogger.Println(host)
-		pr := httputil.NewSingleHostReverseProxy(&url.URL{
+
+		rp := httputil.NewSingleHostReverseProxy(&url.URL{
 			Scheme: "http",
 			Host:   host,
 		})
-		pr.ServeHTTP(w, req)
+		t := time.Now()
+		rp.ServeHTTP(w, r)
+		p.requestLogger.Println(r.URL.Path, host, time.Since(t))
 	})
 
 	if err := http.ListenAndServe(":"+port, nil); err != nil {
