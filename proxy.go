@@ -12,16 +12,17 @@ import (
 )
 
 type proxy struct {
-	requestLogger  *log.Logger
-	routeWhiteList []*regexp.Regexp
+	requestLogger     *log.Logger
+	endpointWhiteList []*regexp.Regexp
+	endpointBlackList []*regexp.Regexp
 }
 
-// newProxy create a new instance of proxy.
-// It set request logger using rLogPath as output file or os.Stdout by default.
-// It also check whitelist file regexs validity
-func newProxy(rLogPath string, whitePath string) *proxy {
+// newProxy creates a new instance of proxy.
+// It sets request logger using rLogPath as output file or os.Stdout by default.
+// If whitePath of blackPath is not empty they are parsed to set endpoint lists.
+func newProxy(rLogPath string, whitePath string, blackPath string) *proxy {
+	var p proxy
 	var l *log.Logger
-	var rwl []*regexp.Regexp
 
 	if rLogPath != "" {
 		f, err := os.OpenFile(rLogPath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0666)
@@ -33,41 +34,80 @@ func newProxy(rLogPath string, whitePath string) *proxy {
 	} else {
 		l = log.New(os.Stdout, "REQUEST: ", log.Ldate|log.Ltime)
 	}
+	p.requestLogger = l
 
 	if whitePath != "" {
-		fWhite, err := os.Open(whitePath)
+		err := p.addEndpointListFromFile(whitePath, true)
 		if err != nil {
 			log.Fatalln(err)
 		}
-		defer fWhite.Close()
-		s := bufio.NewScanner(fWhite)
-		for s.Scan() {
-			rgx, err := regexp.Compile(s.Text())
-			if err != nil {
-				log.Fatalln(err)
-			}
-			rwl = append(rwl, rgx)
+	}
+	if blackPath != "" {
+		err := p.addEndpointListFromFile(blackPath, false)
+		if err != nil {
+			log.Fatalln(err)
 		}
 	}
 
-	return &proxy{requestLogger: l, routeWhiteList: rwl}
+	return &p
 }
 
-// checkWhiteList return true if r match with one regexp in whitelist file
-// or if any whitelist was set
-func (p *proxy) checkWhiteList(r string) bool {
-	if p.routeWhiteList == nil {
-		log.Println("NO WHITELIST DEFINED")
+// addToEndpointListFromFile reads file line by line and calls
+// addToEndpointList for each
+// use t to choose list type: true for whitelist false for blacklist
+func (p *proxy) addEndpointListFromFile(path string, t bool) error {
+	f, err := os.Open(path)
+	if err == nil {
+		defer f.Close()
+		s := bufio.NewScanner(f)
+		for s.Scan() {
+			err = p.addToEndpointList(s.Text(), t)
+			if err != nil {
+				return err
+			}
+		}
+	}
+	return err
+}
+
+// addToEndpointList compiles regex and adds it to an endpointList
+// if regex is valid
+// use t to choose list type: true for whitelist false for blacklist
+func (p *proxy) addToEndpointList(r string, t bool) error {
+	rgx, err := regexp.Compile(r)
+	if err == nil {
+		if t {
+			p.endpointWhiteList = append(p.endpointWhiteList, rgx)
+		} else {
+			p.endpointBlackList = append(p.endpointBlackList, rgx)
+		}
+	}
+	return err
+}
+
+// checkEndpointList looks if r is in whitelist or blackllist
+// returns true if endpoint is allowed
+func (p *proxy) checkEndpointList(e string) bool {
+	if p.endpointBlackList == nil && p.endpointWhiteList == nil {
 		return true
 	}
-	for _, rgx := range p.routeWhiteList {
-		if rgx.MatchString(r) {
+
+	for _, rgx := range p.endpointBlackList {
+		if rgx.MatchString(e) {
+			return false
+		}
+	}
+
+	for _, rgx := range p.endpointWhiteList {
+		if rgx.MatchString(e) {
 			return true
 		}
 	}
 	return false
 }
 
+// run sets a handlefunc which log, authorize and forward requests
+// then it listen and serve on specified port
 func (p *proxy) run(port string) {
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		host := r.Host
@@ -75,7 +115,7 @@ func (p *proxy) run(port string) {
 			w.WriteHeader(http.StatusBadGateway)
 			return
 		}
-		if !p.checkWhiteList(host) {
+		if !p.checkEndpointList(host) {
 			p.requestLogger.Println(host, "FORBIDDEN")
 			w.WriteHeader(http.StatusForbidden)
 			return
