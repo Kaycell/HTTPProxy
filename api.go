@@ -13,35 +13,38 @@ func newApi(p *proxy) *api {
 	return &api{p: p}
 }
 
+func (api *api) allowAction(w http.ResponseWriter, r *http.Request) {
+	rgx := r.PostFormValue("regex")
+	if rgx == "" {
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
+	err := api.p.addToEndpointList(rgx, true)
+	if err == nil {
+		w.WriteHeader(http.StatusOK)
+	} else {
+		w.WriteHeader(http.StatusBadRequest)
+		w.Write([]byte(err.Error()))
+	}
+}
+
+func (api *api) forbidAction(w http.ResponseWriter, r *http.Request) {
+	rgx := r.PostFormValue("regex")
+	if rgx == "" {
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
+	err := api.p.addToEndpointList(rgx, false)
+	if err == nil {
+		w.WriteHeader(http.StatusOK)
+	} else {
+		w.WriteHeader(http.StatusBadRequest)
+		w.Write([]byte(err.Error()))
+	}
+}
+
 func (api *api) run(port string) {
-	http.HandleFunc("/allow", func(w http.ResponseWriter, r *http.Request) {
-		log.Println("KOUKOU")
-		rgx := r.PostFormValue("regex")
-		if rgx == "" {
-			w.WriteHeader(http.StatusBadRequest)
-			return
-		}
-		err := api.p.addToEndpointList(rgx, true)
-		if err == nil {
-			w.WriteHeader(http.StatusOK)
-		} else {
-			w.WriteHeader(http.StatusBadRequest)
-			w.Write([]byte(err.Error()))
-		}
-	})
-	http.HandleFunc("/forbid", func(w http.ResponseWriter, r *http.Request) {
-		rgx := r.PostFormValue("regex")
-		if rgx == "" {
-			w.WriteHeader(http.StatusBadRequest)
-			return
-		}
-		err := api.p.addToEndpointList(rgx, false)
-		if err == nil {
-			w.WriteHeader(http.StatusOK)
-		} else {
-			w.WriteHeader(http.StatusBadRequest)
-			w.Write([]byte(err.Error()))
-		}
-	})
+	http.HandleFunc("/allow", api.allowAction)
+	http.HandleFunc("/forbid", api.forbidAction)
 	log.Fatal(http.ListenAndServe(":"+port, nil))
 }

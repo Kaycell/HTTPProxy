@@ -8,6 +8,7 @@ import (
 	"net/url"
 	"os"
 	"regexp"
+	"sync"
 	"time"
 )
 
@@ -74,13 +75,16 @@ func (p *proxy) addEndpointListFromFile(path string, t bool) error {
 // if regex is valid
 // use t to choose list type: true for whitelist false for blacklist
 func (p *proxy) addToEndpointList(r string, t bool) error {
+	m := sync.Mutex{}
 	rgx, err := regexp.Compile(r)
 	if err == nil {
+		m.Lock()
 		if t {
 			p.endpointWhiteList = append(p.endpointWhiteList, rgx)
 		} else {
 			p.endpointBlackList = append(p.endpointBlackList, rgx)
 		}
+		m.Unlock()
 	}
 	return err
 }
@@ -106,29 +110,29 @@ func (p *proxy) checkEndpointList(e string) bool {
 	return false
 }
 
+func (p *proxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	host := r.Host
+	if host == "" {
+		w.WriteHeader(http.StatusBadGateway)
+		return
+	}
+	if !p.checkEndpointList(host) {
+		p.requestLogger.Println(host, "FORBIDDEN")
+		w.WriteHeader(http.StatusForbidden)
+		return
+	}
+
+	rp := httputil.NewSingleHostReverseProxy(&url.URL{
+		Scheme: "http",
+		Host:   host,
+	})
+	t := time.Now()
+	rp.ServeHTTP(w, r)
+	p.requestLogger.Println(host, time.Since(t))
+}
+
 // run sets a handlefunc which log, authorize and forward requests
 // then it listen and serve on specified port
 func (p *proxy) run(port string) {
-	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		host := r.Host
-		if host == "" {
-			w.WriteHeader(http.StatusBadGateway)
-			return
-		}
-		if !p.checkEndpointList(host) {
-			p.requestLogger.Println(host, "FORBIDDEN")
-			w.WriteHeader(http.StatusForbidden)
-			return
-		}
-
-		rp := httputil.NewSingleHostReverseProxy(&url.URL{
-			Scheme: "http",
-			Host:   host,
-		})
-		t := time.Now()
-		rp.ServeHTTP(w, r)
-		p.requestLogger.Println(host, time.Since(t))
-	})
-
-	log.Fatal(http.ListenAndServe(":"+port, nil))
+	log.Fatal(http.ListenAndServe(":"+port, p))
 }
