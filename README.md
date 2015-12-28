@@ -26,7 +26,7 @@ Requests and their execution time are logged into the output specified or by
 default on standard output.
 
 By default localhost is blacklisted and if incoming requests have
-empty host or host equal to localhost then the proxy return a bad gateway code
+empty host or host equal to localhost then the proxy return a bad gateway code.
 The proxy allow to blacklist or whitelist endpoints with regular expressions.
 If an expression is blacklisted and whitelisted the priority is on blacklist.
 
