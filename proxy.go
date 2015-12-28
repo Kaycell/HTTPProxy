@@ -102,6 +102,9 @@ func (p *proxy) checkEndpointList(e string) bool {
 		}
 	}
 
+	if p.endpointWhiteList == nil {
+		return true
+	}
 	for _, rgx := range p.endpointWhiteList {
 		if rgx.MatchString(e) {
 			return true
@@ -134,5 +137,7 @@ func (p *proxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 // run sets a handlefunc which log, authorize and forward requests
 // then it listen and serve on specified port
 func (p *proxy) run(port string) {
+	p.addToEndpointList("localhost", false)
+	p.addToEndpointList("127.0.0.1", false)
 	log.Fatal(http.ListenAndServe(":"+port, p))
 }
