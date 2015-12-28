@@ -16,6 +16,7 @@ type proxy struct {
 	requestLogger     *log.Logger
 	endpointWhiteList []*regexp.Regexp
 	endpointBlackList []*regexp.Regexp
+	mutex             sync.Mutex
 }
 
 // newProxy creates a new instance of proxy.
@@ -75,16 +76,15 @@ func (p *proxy) addEndpointListFromFile(path string, t bool) error {
 // if regex is valid
 // use t to choose list type: true for whitelist false for blacklist
 func (p *proxy) addToEndpointList(r string, t bool) error {
-	m := sync.Mutex{}
 	rgx, err := regexp.Compile(r)
 	if err == nil {
-		m.Lock()
+		p.mutex.Lock()
 		if t {
 			p.endpointWhiteList = append(p.endpointWhiteList, rgx)
 		} else {
 			p.endpointBlackList = append(p.endpointBlackList, rgx)
 		}
-		m.Unlock()
+		p.mutex.Unlock()
 	}
 	return err
 }
