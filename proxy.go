@@ -130,6 +130,5 @@ func (p *proxy) run(port string) {
 		p.requestLogger.Println(host, time.Since(t))
 	})
 
-	if err := http.ListenAndServe(":"+port, nil); err != nil {
-	}
+	log.Fatal(http.ListenAndServe(":"+port, nil))
 }
