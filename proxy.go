@@ -113,6 +113,8 @@ func (p *proxy) checkEndpointList(e string) bool {
 	return false
 }
 
+// ServeHTTP satisfy HandlerFunc interface and
+// log, authorize and forward requests
 func (p *proxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	host := r.Host
 	if host == "" {
@@ -134,8 +136,7 @@ func (p *proxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	p.requestLogger.Println(host, time.Since(t))
 }
 
-// run sets a handlefunc which log, authorize and forward requests
-// then it listen and serve on specified port
+// run add localhost to blacklist and launch proxy
 func (p *proxy) run(port string) {
 	p.addToEndpointList("localhost", false)
 	p.addToEndpointList("127.0.0.1", false)

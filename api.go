@@ -13,6 +13,7 @@ func newApi(p *proxy) *api {
 	return &api{p: p}
 }
 
+// allowAction register a regex in whitelist
 func (api *api) allowAction(w http.ResponseWriter, r *http.Request) {
 	rgx := r.PostFormValue("regex")
 	if rgx == "" {
@@ -28,6 +29,7 @@ func (api *api) allowAction(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// forbid action register a regex in blacklist
 func (api *api) forbidAction(w http.ResponseWriter, r *http.Request) {
 	rgx := r.PostFormValue("regex")
 	if rgx == "" {
@@ -43,6 +45,7 @@ func (api *api) forbidAction(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// run set handlers and launch api
 func (api *api) run(port string) {
 	http.HandleFunc("/allow", api.allowAction)
 	http.HandleFunc("/forbid", api.forbidAction)
